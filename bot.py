@@ -1,4 +1,8 @@
+```python
 import os
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -9,19 +13,39 @@ from telegram.ext import (
 )
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
-ADMIN_ID = 1359403890
+
+ADMIN_IDS = [
+    1359403890,
+]
 
 keyboard = ReplyKeyboardMarkup(
-    [["💌 Надіслати побажання"]],
+    [["💌 Надіслати повідомлення"]],
     resize_keyboard=True
 )
+
+
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is running!")
+
+    def log_message(self, format, *args):
+        pass
+
+
+def start_web_server():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), HealthHandler)
+    server.serve_forever()
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "👋 Привіт!\n\n"
-        "Це анонімна «Скринька побажань» Гімназії №2 💙💛\n\n"
-        "Тут ти можеш залишити побажання, пропозицію або ідею.",
+        "Це анонімна скринька Гімназії №2 💙💛\n\n"
+        "Тут ти можеш залишити ідею, пропозицію, "
+        "побажання, скаргу або зауваження.",
         reply_markup=keyboard
     )
 
@@ -30,8 +54,9 @@ async def wish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["waiting_for_wish"] = True
 
     await update.message.reply_text(
-        "💌 Напиши своє побажання або пропозицію.\n\n"
-        "Повідомлення буде надіслано анонімно."
+        "💌 Напиши своє повідомлення.\n\n"
+        "Ідея, пропозиція, побажання, скарга чи зауваження — "
+        "усе можна надіслати анонімно."
     )
 
 
@@ -41,28 +66,34 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = update.message.text
 
-    await context.bot.send_message(
-        chat_id=ADMIN_ID,
-        text=f"💌 НОВЕ АНОНІМНЕ ПОБАЖАННЯ\n\n{text}"
-    )
+    for admin_id in ADMIN_IDS:
+        await context.bot.send_message(
+            chat_id=admin_id,
+            text=f"💌 НОВЕ АНОНІМНЕ ПОВІДОМЛЕННЯ\n\n{text}"
+        )
 
     context.user_data["waiting_for_wish"] = False
 
     await update.message.reply_text(
-        "✅ Дякуємо!\n"
-        "Твоє побажання отримано анонімно 💙💛",
+        "✅ Повідомлення отримано!\n"
+        "Дякуємо за твою думку 💙💛",
         reply_markup=keyboard
     )
 
 
 def main():
+    threading.Thread(
+        target=start_web_server,
+        daemon=True
+    ).start()
+
     app = Application.builder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
 
     app.add_handler(
         MessageHandler(
-            filters.Regex("^💌 Надіслати побажання$"),
+            filters.Regex("^💌 Надіслати повідомлення$"),
             wish
         )
     )
@@ -81,3 +112,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+```
+
